@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Replace every https://YOUR-SITE with the address where you host this folder (must be HTTPS). -->
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:type="ContentApp">
+  <Id>0e4d9b8f-beef-4f59-8942-4f546510e2bb</Id>
+  <Version>1.0.0.0</Version>
+  <ProviderName>Liam Genery</ProviderName>
+  <DefaultLocale>en-GB</DefaultLocale>
+  <DisplayName DefaultValue="Maths Manipulatives"/>
+  <Description DefaultValue="Counters, place value counters, base 10 blocks, number shapes, rods and mats you can drag around during a slideshow."/>
+  <IconUrl DefaultValue="https://YOUR-SITE/icon-32.png"/>
+  <HighResolutionIconUrl DefaultValue="https://YOUR-SITE/icon-64.png"/>
+  <SupportUrl DefaultValue="https://YOUR-SITE/index.html"/>
+  <AppDomains>
+    <AppDomain>https://YOUR-SITE</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Presentation"/>
+  </Hosts>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://YOUR-SITE/index.html"/>
+    <RequestedWidth>960</RequestedWidth>
+    <RequestedHeight>540</RequestedHeight>
+  </DefaultSettings>
+  <Permissions>ReadWriteDocument</Permissions>
+  <AllowSnapshot>true</AllowSnapshot>
+</OfficeApp>

@@ -1,0 +1,548 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maths Manipulatives</title>
+<script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+<style>
+  :root { --accent:#1d6fb8; --ink:#1f2933; --line:#d5dbe3; }
+  html, body { margin:0; height:100%; overflow:hidden; background:#fff; color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;
+    font-size:clamp(10px,1.35vw,20px); -webkit-user-select:none; user-select:none; }
+  #board { position:fixed; inset:0; background:#fff; touch-action:none; overflow:hidden; }
+  #board.grid { background-image:linear-gradient(#e3e8ef 1px,transparent 1px),linear-gradient(90deg,#e3e8ef 1px,transparent 1px);
+    background-size:var(--g) var(--g); }
+  .piece { position:absolute; touch-action:none; cursor:grab; filter:drop-shadow(0 2px 2px rgba(0,0,0,.28)); }
+  .piece.mat { filter:none; }
+  .piece svg { display:block; width:100%; height:100%; overflow:visible; }
+  .piece.sel { filter:drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 2px var(--accent)); }
+  .piece.mat.sel { filter:drop-shadow(0 0 3px var(--accent)); }
+  #marquee { position:fixed; border:2px dashed var(--accent); background:rgba(29,111,184,.08); display:none; pointer-events:none; z-index:99999; }
+
+  #toolbar { position:fixed; left:.5rem; right:.5rem; bottom:.5rem; background:rgba(248,250,252,.97); border:1px solid var(--line);
+    border-radius:.8rem; box-shadow:0 .2rem .8rem rgba(0,0,0,.15); z-index:100000; padding:.35rem .5rem .4rem; touch-action:none; }
+  #toolbar.hot { background:#fde2e2; border-color:#e63946; }
+  #toolbar.hot::after { content:"Release to remove"; position:absolute; left:50%; top:-1.9rem; transform:translateX(-50%);
+    background:#e63946; color:#fff; padding:.2rem .6rem; border-radius:.4rem; font-weight:600; }
+  #toolbar.hidden { display:none; }
+  .top { display:flex; align-items:center; gap:.4rem; }
+  .tabs { display:flex; gap:.15rem; flex:1; overflow-x:auto; scrollbar-width:none; }
+  button { font:inherit; color:inherit; cursor:pointer; }
+  .tab { border:0; background:transparent; padding:.3rem .55rem; border-radius:.5rem; font-weight:600; white-space:nowrap; }
+  .tab.on { background:var(--accent); color:#fff; }
+  .actions { display:flex; gap:.2rem; position:relative; }
+  .act { border:1px solid #cfd6df; background:#fff; border-radius:.5rem; padding:.25rem .45rem; min-width:2rem; white-space:nowrap; }
+  .act:active, .act.on { background:#e3ecf7; }
+  .tray { display:flex; gap:.5rem; align-items:center; overflow-x:auto; padding:.35rem .1rem 0; height:3.3rem; scrollbar-width:thin; }
+  .tray-item { flex:none; height:3rem; max-width:7rem; display:flex; align-items:center; justify-content:center; padding:0 .3rem;
+    border-radius:.5rem; cursor:grab; touch-action:none; }
+  .tray-item:hover { background:#eaf1f9; }
+  .tray-item svg { height:100%; width:auto; max-width:7rem; overflow:visible; }
+  #more { position:absolute; right:0; bottom:100%; margin-bottom:.5rem; background:#fff; border:1px solid var(--line); border-radius:.6rem;
+    box-shadow:0 .2rem .8rem rgba(0,0,0,.18); display:none; flex-direction:column; padding:.3rem; min-width:13rem; }
+  #more.open { display:flex; }
+  #more button { text-align:left; border:0; background:none; padding:.45rem .6rem; border-radius:.4rem; }
+  #more button:hover { background:#eef3f9; }
+  #more hr { border:0; border-top:1px solid var(--line); margin:.25rem 0; }
+  #showBar { position:fixed; right:.5rem; bottom:.5rem; z-index:100000; display:none; border:1px solid var(--line); background:#fff;
+    border-radius:.6rem; padding:.3rem .6rem; opacity:.75; box-shadow:0 .1rem .4rem rgba(0,0,0,.15); }
+  #toast { position:fixed; left:50%; top:1rem; transform:translateX(-50%); background:var(--ink); color:#fff; padding:.5rem .9rem;
+    border-radius:.5rem; opacity:0; transition:opacity .2s; pointer-events:none; z-index:100001; max-width:80vw; text-align:center; }
+  #toast.show { opacity:.95; }
+  #help { position:fixed; left:50%; top:50%; transform:translate(-50%,-55%); background:#fff; border:1px solid var(--line); border-radius:.8rem;
+    box-shadow:0 .4rem 1.6rem rgba(0,0,0,.25); padding:1rem 1.3rem; z-index:100002; display:none; max-width:32rem; line-height:1.45; }
+  #help.open { display:block; }
+  #help h2 { margin:0 0 .5rem; font-size:1.2rem; }
+  #help ul { margin:0 0 .8rem; padding-left:1.1rem; }
+</style>
+</head>
+<body>
+<div id="board"></div>
+<div id="marquee"></div>
+
+<div id="toolbar">
+  <div class="top">
+    <div class="tabs" id="tabs"></div>
+    <div class="actions">
+      <button class="act" id="bCopy" title="Copy selected (Ctrl+D)">Copy</button>
+      <button class="act" id="bTurn" title="Flip counters / turn pieces (or double-tap a piece)">Turn</button>
+      <button class="act" id="bSwap" title="Exchange: select 10 matching pieces to group them, or 1 piece to break it into 10">Exchange</button>
+      <button class="act" id="bDel" title="Delete selected (Delete key)">Delete</button>
+      <button class="act" id="bSmaller" title="Smaller">A−</button>
+      <button class="act" id="bBigger" title="Bigger">A+</button>
+      <button class="act" id="bMore" title="More options">⋯</button>
+      <button class="act" id="bHide" title="Hide toolbar">▾</button>
+      <div id="more">
+        <button id="mLabels">Numbers on rods: on</button>
+        <button id="mGrid">Squared paper: off</button>
+        <hr>
+        <button id="mSave">Save as starting layout</button>
+        <button id="mReset">Reset to starting layout</button>
+        <button id="mClear">Clear everything</button>
+        <hr>
+        <button id="mHelp">How to use</button>
+      </div>
+    </div>
+  </div>
+  <div class="tray" id="tray"></div>
+</div>
+<button id="showBar" title="Show toolbar">☰ Tools</button>
+<div id="toast"></div>
+<div id="help">
+  <h2>How to use</h2>
+  <ul>
+    <li><b>Add:</b> drag a piece out of the tray, or tap it to drop one in the middle.</li>
+    <li><b>Move:</b> drag pieces. Drag on empty space to draw a box and select a group.</li>
+    <li><b>Flip / turn:</b> double-tap a piece (two-sided counters flip, rods and blocks turn).</li>
+    <li><b>Exchange:</b> select 10 matching place value counters or base 10 blocks and press Exchange to group them. Select 1 and press Exchange to break it into 10.</li>
+    <li><b>Remove:</b> drag pieces back onto the toolbar, or press Delete.</li>
+    <li><b>Prepare a slide:</b> set it up in normal view, then ⋯ → Save as starting layout and save the presentation. Every slideshow starts from that layout; ⋯ → Reset puts it back.</li>
+  </ul>
+  <button class="act" id="hClose">Got it</button>
+</div>
+
+<script>
+(() => {
+  // ---------- data ----------
+  const COUNTERS = [
+    { a:'#e63946', b:'#ffd166' }, { a:'#e63946' }, { a:'#ffd166' }, { a:'#3a86ff' },
+    { a:'#2a9d4b' }, { a:'#f77f00' }, { a:'#8338ec' }, { a:'#ffffff' }
+  ];
+  const PV_SMALL_TO_BIG = ['0.01','0.1','1','10','100','1000'];
+  const PVC = { '1000':'#6a4c93', '100':'#1d6fb8', '10':'#2a9d4b', '1':'#e63946', '0.1':'#f4a300', '0.01':'#6c757d' };
+  const DIENES = ['one','ten','hundred','thousand'];
+  const SHAPE_COL = ['', '#ff8fab','#4ea8de','#80b918','#ffb703','#9d4edd','#43aa8b','#f3722c','#577590','#c9184a','#90be6d'];
+  const ROD_COL = ['', '#f5f5ef','#d62828','#8fd16a','#b5179e','#f9d342','#1b7a3a','#2b2b2b','#8d5524','#1e5bc6','#f77f00'];
+  const ROD_DARK_TEXT = [false, true,false,true,false,true,false,false,false,false,false];
+  const WOOD = '#f6d08a', WOOD_LINE = '#a87420';
+  const STORE_KEY = 'mm-start-layout-v1';
+
+  const TABS = {
+    counters: { label:'Counters', items: COUNTERS.map(c => ({ t:'counter', a:c.a, b:c.b || null, side:0 })) },
+    pv:       { label:'Place value', items: ['1000','100','10','1','0.1','0.01'].map(v => ({ t:'pvc', v })) },
+    base10:   { label:'Base 10', items: DIENES.map(k => ({ t:'dienes', k })) },
+    shapes:   { label:'Number shapes', items: [1,2,3,4,5,6,7,8,9,10].map(n => ({ t:'shape', n })) },
+    rods:     { label:'Rods', items: [1,2,3,4,5,6,7,8,9,10].map(n => ({ t:'rod', n })) },
+    mats:     { label:'Mats', items: ['ten','double','pw','pv','pvd'].map(k => ({ t:'mat', k })) }
+  };
+
+  // ---------- state ----------
+  const board = document.getElementById('board');
+  const toolbar = document.getElementById('toolbar');
+  const marquee = document.getElementById('marquee');
+  let W = 960, H = 540, U = 20;
+  let state = { pieces:[], size:1, labels:true, grid:false };
+  let nextId = 1, topZ = 1;
+  const els = new Map();
+  const sel = new Set();
+  let inOffice = false;
+
+  const byId = id => state.pieces.find(p => p.id === id);
+  const selList = () => state.pieces.filter(p => sel.has(p.id));
+
+  function shade(hex, f) {
+    const n = parseInt(hex.slice(1), 16);
+    const c = v => Math.min(255, Math.round(v * f));
+    const r = c((n >> 16) & 255), g = c((n >> 8) & 255), b = c(n & 255);
+    return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+  }
+
+  function measure() {
+    W = window.innerWidth; H = window.innerHeight;
+    U = (W / 48) * state.size;
+    board.style.setProperty('--g', U + 'px');
+  }
+
+  // ---------- drawing ----------
+  function gridCells(x, y, cols, rows, cell, sw) {
+    let s = `<rect x="${x}" y="${y}" width="${cols*cell}" height="${rows*cell}" fill="${WOOD}" stroke="${WOOD_LINE}" stroke-width="${sw*1.6}"/>`;
+    for (let i = 1; i < cols; i++) s += `<line x1="${x+i*cell}" y1="${y}" x2="${x+i*cell}" y2="${y+rows*cell}" stroke="${WOOD_LINE}" stroke-width="${sw}"/>`;
+    for (let j = 1; j < rows; j++) s += `<line x1="${x}" y1="${y+j*cell}" x2="${x+cols*cell}" y2="${y+j*cell}" stroke="${WOOD_LINE}" stroke-width="${sw}"/>`;
+    return s;
+  }
+
+  function def(p, pre) {
+    const u = U;
+    switch (p.t) {
+      case 'counter': {
+        const d = 2 * u;
+        if (pre === 't' && p.b) {
+          return { w:d, h:d, svg:`<svg viewBox="0 0 100 100"><path d="M50 4 A46 46 0 0 0 50 96 Z" fill="${p.a}"/><path d="M50 4 A46 46 0 0 1 50 96 Z" fill="${p.b}"/><circle cx="50" cy="50" r="46" fill="none" stroke="#666" stroke-width="3"/></svg>` };
+        }
+        const col = (p.side && p.b) ? p.b : p.a;
+        return { w:d, h:d, svg:`<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="${col}" stroke="${shade(col,.7)}" stroke-width="4"/><circle cx="50" cy="50" r="31" fill="none" stroke="${shade(col,.84)}" stroke-width="3"/></svg>` };
+      }
+      case 'pvc': {
+        const d = 2.6 * u, col = PVC[p.v];
+        const fs = p.v.length <= 2 ? 40 : p.v.length === 3 ? 33 : 27;
+        return { w:d, h:d, svg:`<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="46" fill="${col}" stroke="${shade(col,.65)}" stroke-width="4"/><circle cx="50" cy="50" r="37" fill="none" stroke="rgba(255,255,255,.45)" stroke-width="3"/><text x="50" y="52" text-anchor="middle" dominant-baseline="central" font-family="Arial,sans-serif" font-weight="700" font-size="${fs}" fill="#fff">${p.v}</text></svg>` };
+      }
+      case 'dienes': {
+        if (p.k === 'one')  return { w:u, h:u, svg:`<svg viewBox="0 0 10 10">${gridCells(0,0,1,1,10,.5)}</svg>` };
+        if (p.k === 'ten')  return { w:10*u, h:u, svg:`<svg viewBox="0 0 100 10">${gridCells(0,0,10,1,10,.5)}</svg>` };
+        if (p.k === 'hundred') return { w:10*u, h:10*u, svg:`<svg viewBox="0 0 100 100">${gridCells(0,0,10,10,10,.5)}</svg>` };
+        // thousand: oblique cube, depth drawn at 4 units per 10 cubes
+        let s = `<polygon points="0,40 40,0 140,0 100,40" fill="${shade(WOOD,1.04)}" stroke="${WOOD_LINE}" stroke-width=".9"/>`;
+        s += `<polygon points="100,40 140,0 140,100 100,140" fill="${shade(WOOD,.85)}" stroke="${WOOD_LINE}" stroke-width=".9"/>`;
+        for (let i = 1; i < 10; i++) {
+          s += `<line x1="${i*10}" y1="40" x2="${i*10+40}" y2="0" stroke="${WOOD_LINE}" stroke-width=".5"/>`;
+          s += `<line x1="${4*i}" y1="${40-4*i}" x2="${100+4*i}" y2="${40-4*i}" stroke="${WOOD_LINE}" stroke-width=".5"/>`;
+          s += `<line x1="${100+4*i}" y1="${40-4*i}" x2="${100+4*i}" y2="${140-4*i}" stroke="${WOOD_LINE}" stroke-width=".5"/>`;
+          s += `<line x1="100" y1="${40+i*10}" x2="140" y2="${i*10}" stroke="${WOOD_LINE}" stroke-width=".5"/>`;
+        }
+        s += gridCells(0, 40, 10, 10, 10, .5);
+        return { w:14*u, h:14*u, svg:`<svg viewBox="0 0 140 140">${s}</svg>` };
+      }
+      case 'shape': {
+        const n = p.n, r = Math.ceil(n / 2), c = 1.7 * u, col = SHAPE_COL[n];
+        const mid = (pre || 'p') + 'm' + (p.id || n);
+        let cells = '', holes = '', rims = '';
+        for (let i = 0; i < n; i++) {
+          let row, colI;
+          if (n % 2 && i === n - 1) { row = r - 1; colI = 0; } else { row = Math.floor(i / 2); colI = i % 2; }
+          const x = colI * 10, y = (r - 1 - row) * 10;
+          cells += `<rect x="${x}" y="${y}" width="10" height="10" fill="#fff"/>`;
+          holes += `<circle cx="${x+5}" cy="${y+5}" r="2.6" fill="#000"/>`;
+          rims  += `<circle cx="${x+5}" cy="${y+5}" r="2.6" fill="none" stroke="${shade(col,.7)}" stroke-width=".6"/>`;
+        }
+        return { w:2*c, h:r*c, svg:`<svg viewBox="0 0 20 ${r*10}"><defs><mask id="${mid}">${cells}${holes}</mask></defs><rect width="20" height="${r*10}" fill="${col}" mask="url(#${mid})"/>${rims}</svg>` };
+      }
+      case 'rod': {
+        const n = p.n, col = ROD_COL[n];
+        const label = state.labels ? `<text x="${n*5}" y="5.4" text-anchor="middle" dominant-baseline="central" font-family="Arial,sans-serif" font-weight="700" font-size="6.5" fill="${ROD_DARK_TEXT[n] ? '#333' : '#fff'}">${n}</text>` : '';
+        return { w:n*u, h:u, svg:`<svg viewBox="0 0 ${n*10} 10"><rect x=".4" y=".4" width="${n*10-.8}" height="9.2" rx="1" fill="${col}" stroke="${shade(col === '#f5f5ef' ? '#c9c9c0' : col,.7)}" stroke-width=".7"/>${label}</svg>` };
+      }
+      case 'mat': return matDef(p.k, u);
+    }
+  }
+
+  function matDef(k, u) {
+    const st = 'stroke="#2b2d42" stroke-width=".6"';
+    if (k === 'ten' || k === 'double') {
+      const frame = y => {
+        let s = `<rect x="0" y="${y}" width="50" height="20" fill="#fff" ${st}/>`;
+        for (let i = 1; i < 5; i++) s += `<line x1="${i*10}" y1="${y}" x2="${i*10}" y2="${y+20}" ${st}/>`;
+        return s + `<line x1="0" y1="${y+10}" x2="50" y2="${y+10}" ${st}/>`;
+      };
+      if (k === 'ten') return { w:13*u, h:5.2*u, svg:`<svg viewBox="0 0 50 20">${frame(0)}</svg>` };
+      return { w:13*u, h:13*u*43/50, svg:`<svg viewBox="0 0 50 43">${frame(0)}${frame(23)}</svg>` };
+    }
+    if (k === 'pw') {
+      const c = (x, y) => `<circle cx="${x}" cy="${y}" r="20" fill="#fff" stroke="#2b2d42" stroke-width="1.2"/>`;
+      return { w:18*u, h:16.2*u, svg:`<svg viewBox="0 0 100 90"><line x1="50" y1="22" x2="22" y2="68" stroke="#2b2d42" stroke-width="1.2"/><line x1="50" y1="22" x2="78" y2="68" stroke="#2b2d42" stroke-width="1.2"/>${c(50,22)}${c(22,68)}${c(78,68)}</svg>` };
+    }
+    // place value charts
+    const cols = k === 'pv' ? [['Th','1000'],['H','100'],['T','10'],['O','1']] : [['O','1'],['t','0.1'],['h','0.01']];
+    const cw = 30, n = cols.length;
+    let s = `<rect x="0" y="0" width="${n*cw}" height="92" fill="#fff" stroke="#2b2d42" stroke-width=".8"/>`;
+    cols.forEach(([lab, v], i) => {
+      s += `<rect x="${i*cw}" y="0" width="${cw}" height="12" fill="${PVC[v]}" stroke="#2b2d42" stroke-width=".8"/>`;
+      s += `<text x="${i*cw+cw/2}" y="6.5" text-anchor="middle" dominant-baseline="central" font-family="Arial,sans-serif" font-weight="700" font-size="7" fill="#fff">${lab}</text>`;
+      if (i) s += `<line x1="${i*cw}" y1="12" x2="${i*cw}" y2="92" stroke="#2b2d42" stroke-width="${k==='pvd' && i===1 ? 1.4 : .8}"/>`;
+    });
+    if (k === 'pvd') s += `<circle cx="${cw}" cy="86" r="2.6" fill="#2b2d42"/>`;
+    return { w:n*6*u, h:92/30*6*u, svg:`<svg viewBox="0 0 ${n*cw} 92">${s}</svg>` };
+  }
+
+  // ---------- render ----------
+  function place(p) {
+    const el = els.get(p.id); if (!el) return;
+    el.style.left = (p.x * W - p._w / 2) + 'px';
+    el.style.top  = (p.y * H - p._h / 2) + 'px';
+    el.style.transform = p.r ? `rotate(${p.r}deg)` : '';
+    el.style.zIndex = (p.t === 'mat' ? 0 : 50000) + p.z;
+  }
+  function render(p) {
+    let el = els.get(p.id);
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'piece' + (p.t === 'mat' ? ' mat' : '');
+      el.dataset.id = p.id;
+      board.appendChild(el);
+      els.set(p.id, el);
+    }
+    const d = def(p, 'p');
+    el.innerHTML = d.svg;
+    p._w = d.w; p._h = d.h;
+    el.style.width = d.w + 'px'; el.style.height = d.h + 'px';
+    el.classList.toggle('sel', sel.has(p.id));
+    place(p);
+  }
+  function renderAll() {
+    measure();
+    for (const [id, el] of els) if (!byId(id)) { el.remove(); els.delete(id); }
+    state.pieces.forEach(render);
+    board.classList.toggle('grid', !!state.grid);
+    document.getElementById('mLabels').textContent = 'Numbers on rods: ' + (state.labels ? 'on' : 'off');
+    document.getElementById('mGrid').textContent = 'Squared paper: ' + (state.grid ? 'on' : 'off');
+  }
+  function refreshSel() { for (const [id, el] of els) el.classList.toggle('sel', sel.has(id)); }
+
+  function addPiece(spec, x, y) {
+    const p = Object.assign({}, spec, { id: nextId++, x, y, r: 0, z: ++topZ });
+    state.pieces.push(p); render(p); return p;
+  }
+  function removeIds(ids) {
+    const set = new Set(ids);
+    state.pieces = state.pieces.filter(p => !set.has(p.id));
+    ids.forEach(id => { const el = els.get(id); if (el) el.remove(); els.delete(id); sel.delete(id); });
+  }
+  const clamp01 = v => Math.min(1, Math.max(0, v));
+
+  // ---------- toast ----------
+  let toastT;
+  function toast(msg) {
+    const t = document.getElementById('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  // ---------- tray ----------
+  let currentTab = 'counters';
+  function buildTabs() {
+    const tabs = document.getElementById('tabs'); tabs.innerHTML = '';
+    for (const [key, tab] of Object.entries(TABS)) {
+      const b = document.createElement('button');
+      b.className = 'tab' + (key === currentTab ? ' on' : ''); b.textContent = tab.label;
+      b.onclick = () => { currentTab = key; buildTabs(); buildTray(); };
+      tabs.appendChild(b);
+    }
+  }
+  function buildTray() {
+    const tray = document.getElementById('tray'); tray.innerHTML = '';
+    TABS[currentTab].items.forEach(spec => {
+      const item = document.createElement('div');
+      item.className = 'tray-item';
+      item.innerHTML = def(spec, 't').svg;
+      item.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        closeMore();
+        sel.clear();
+        const p = addPiece(spec, clamp01(e.clientX / W), clamp01(e.clientY / H));
+        sel.add(p.id); refreshSel();
+        startDrag(e, 'move', { fromTray: true, pid: p.id });
+      });
+      tray.appendChild(item);
+    });
+  }
+
+  // ---------- pointer handling ----------
+  let drag = null, lastTap = { id: null, t: 0 };
+  function overToolbar(x, y) {
+    if (toolbar.classList.contains('hidden')) return false;
+    const r = toolbar.getBoundingClientRect();
+    return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
+  }
+  function startDrag(e, mode, extra = {}) {
+    drag = Object.assign({ id: e.pointerId, mode, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, moved: false }, extra);
+  }
+  board.addEventListener('pointerdown', e => {
+    if (drag) return;
+    closeMore();
+    const el = e.target.closest('.piece');
+    if (el) {
+      const id = +el.dataset.id;
+      if (!sel.has(id)) { if (!e.shiftKey) sel.clear(); sel.add(id); }
+      // bring selection to front, keeping its order
+      selList().sort((a, b) => a.z - b.z).forEach(p => { p.z = ++topZ; place(p); });
+      refreshSel();
+      startDrag(e, 'move', { pid: id });
+    } else {
+      if (!e.shiftKey) { sel.clear(); refreshSel(); }
+      startDrag(e, 'marquee');
+    }
+  });
+  window.addEventListener('pointermove', e => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dx = e.clientX - drag.lx, dy = e.clientY - drag.ly;
+    if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 6) drag.moved = true;
+    if (drag.mode === 'move') {
+      selList().forEach(p => { p.x = clamp01(p.x + dx / W); p.y = clamp01(p.y + dy / H); place(p); });
+      toolbar.classList.toggle('hot', drag.moved && overToolbar(e.clientX, e.clientY));
+    } else if (drag.moved) {
+      const x = Math.min(drag.x0, e.clientX), y = Math.min(drag.y0, e.clientY);
+      Object.assign(marquee.style, { display: 'block', left: x + 'px', top: y + 'px',
+        width: Math.abs(e.clientX - drag.x0) + 'px', height: Math.abs(e.clientY - drag.y0) + 'px' });
+    }
+    drag.lx = e.clientX; drag.ly = e.clientY;
+  });
+  function endDrag(e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag; drag = null;
+    toolbar.classList.remove('hot');
+    if (d.mode === 'move') {
+      if (d.moved && overToolbar(e.clientX, e.clientY)) {
+        removeIds([...sel]);
+      } else if (!d.moved && d.fromTray) {
+        const p = byId(d.pid);
+        p.x = 0.5 + (Math.random() - .5) * .3; p.y = 0.4 + (Math.random() - .5) * .3; place(p);
+      } else if (!d.moved) {
+        const now = Date.now();
+        if (lastTap.id === d.pid && now - lastTap.t < 420) { turn([byId(d.pid)]); lastTap = { id: null, t: 0 }; }
+        else lastTap = { id: d.pid, t: now };
+      }
+    } else if (d.moved) {
+      const x1 = Math.min(d.x0, e.clientX), x2 = Math.max(d.x0, e.clientX);
+      const y1 = Math.min(d.y0, e.clientY), y2 = Math.max(d.y0, e.clientY);
+      state.pieces.forEach(p => {
+        const cx = p.x * W, cy = p.y * H;
+        if (cx >= x1 && cx <= x2 && cy >= y1 && cy <= y2) sel.add(p.id);
+      });
+      refreshSel();
+    }
+    marquee.style.display = 'none';
+  }
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
+  // ---------- actions ----------
+  function turn(list) {
+    list.forEach(p => {
+      if (!p) return;
+      if (p.t === 'counter') { if (p.b) { p.side = p.side ? 0 : 1; render(p); } }
+      else if (p.t === 'rod' || p.t === 'shape' || (p.t === 'dienes' && p.k !== 'one' && p.k !== 'thousand')) { p.r = ((p.r || 0) + 90) % 360; place(p); }
+    });
+  }
+  function copySel() {
+    const list = selList(); if (!list.length) return toast('Select something to copy');
+    sel.clear();
+    list.forEach(p => {
+      const c = Object.assign({}, p); delete c.id; delete c._w; delete c._h;
+      const n = addPiece(c, clamp01(p.x + 1.5 * U / W), clamp01(p.y + 1.5 * U / H));
+      n.r = p.r; place(n); sel.add(n.id);
+    });
+    refreshSel();
+  }
+  function deleteSel() {
+    if (!sel.size) return toast('Select something to delete');
+    removeIds([...sel]);
+  }
+  function exchange() {
+    const list = selList();
+    if (!list.length) return toast('Select 10 matching pieces to group, or 1 piece to break apart');
+    const ladderOf = p => p.t === 'pvc' ? { ladder: PV_SMALL_TO_BIG, key: 'v' } : p.t === 'dienes' ? { ladder: DIENES, key: 'k' } : null;
+    const info = ladderOf(list[0]);
+    if (!info) return toast('Exchange works with place value counters and base 10 blocks');
+    const { ladder, key } = info;
+    const val = list[0][key], idx = ladder.indexOf(val);
+    const cx = list.reduce((s, p) => s + p.x, 0) / list.length, cy = list.reduce((s, p) => s + p.y, 0) / list.length;
+
+    if (list.length === 10 && list.every(p => p.t === list[0].t && p[key] === val)) {
+      if (idx >= ladder.length - 1) return toast('That is already the biggest piece');
+      removeIds(list.map(p => p.id));
+      const n = addPiece({ t: list[0].t, [key]: ladder[idx + 1] }, cx, cy);
+      sel.clear(); sel.add(n.id); refreshSel();
+      return;
+    }
+    if (list.length === 1) {
+      if (idx <= 0) return toast('That is already the smallest piece');
+      const t = list[0].t, small = ladder[idx - 1];
+      removeIds([list[0].id]);
+      sel.clear();
+      for (let i = 0; i < 10; i++) {
+        let ox, oy;
+        if (t === 'pvc') { ox = ((i % 5) - 2) * 2.8 * U; oy = (Math.floor(i / 5) - .5) * 2.8 * U; }
+        else if (small === 'one') { ox = ((i % 5) - 2) * 1.3 * U; oy = (Math.floor(i / 5) - .5) * 1.3 * U; }
+        else if (small === 'ten') { ox = 0; oy = (i - 4.5) * 1.25 * U; }
+        else { ox = (i - 4.5) * .9 * U; oy = (i - 4.5) * .9 * U; }
+        const n = addPiece({ t, [key]: small }, clamp01(cx + ox / W), clamp01(cy + oy / H));
+        sel.add(n.id);
+      }
+      refreshSel();
+      return;
+    }
+    toast('Select exactly 10 matching pieces to group, or 1 piece to break apart');
+  }
+
+  // ---------- save / load ----------
+  function serialize() {
+    return { v: 1, size: state.size, labels: state.labels, grid: state.grid,
+      pieces: state.pieces.map(p => { const c = Object.assign({}, p); delete c._w; delete c._h; return c; }) };
+  }
+  function applyLayout(obj) {
+    if (!obj || !Array.isArray(obj.pieces)) return false;
+    els.forEach(el => el.remove()); els.clear(); sel.clear();
+    state = { pieces: obj.pieces, size: obj.size || 1, labels: obj.labels !== false, grid: !!obj.grid };
+    nextId = state.pieces.reduce((m, p) => Math.max(m, p.id), 0) + 1;
+    topZ = state.pieces.reduce((m, p) => Math.max(m, p.z || 0), 0) + 1;
+    renderAll();
+    return true;
+  }
+  function readSaved() {
+    try {
+      if (inOffice) { const s = Office.context.document.settings.get(STORE_KEY); return s ? JSON.parse(s) : null; }
+      const s = localStorage.getItem(STORE_KEY); return s ? JSON.parse(s) : null;
+    } catch (_) { return null; }
+  }
+  function saveStart() {
+    const json = JSON.stringify(serialize());
+    if (inOffice) {
+      try {
+        Office.context.document.settings.set(STORE_KEY, json);
+        Office.context.document.settings.saveAsync(r => {
+          if (r.status === Office.AsyncResultStatus.Succeeded) toast('Starting layout saved. Save the presentation to keep it.');
+          else toast('Could not save here. Try in normal (editing) view.');
+        });
+      } catch (_) { toast('Could not save here. Try in normal (editing) view.'); }
+    } else {
+      try { localStorage.setItem(STORE_KEY, json); toast('Starting layout saved in this browser'); }
+      catch (_) { toast('This browser will not let the page save'); }
+    }
+  }
+  function resetStart() {
+    if (!applyLayout(readSaved())) toast('No starting layout saved yet');
+  }
+  let clearArmed = 0;
+  function clearAll() {
+    const b = document.getElementById('mClear');
+    if (Date.now() - clearArmed < 3000) {
+      removeIds(state.pieces.map(p => p.id)); clearArmed = 0; b.textContent = 'Clear everything'; closeMore();
+    } else {
+      clearArmed = Date.now(); b.textContent = 'Tap again to clear';
+      setTimeout(() => { b.textContent = 'Clear everything'; }, 3000);
+    }
+  }
+
+  // ---------- UI wiring ----------
+  const more = document.getElementById('more');
+  function closeMore() { more.classList.remove('open'); }
+  const on = (id, fn) => document.getElementById(id).addEventListener('click', fn);
+  on('bCopy', copySel);
+  on('bTurn', () => { if (!sel.size) toast('Select something, or double-tap a piece'); turn(selList()); });
+  on('bSwap', exchange);
+  on('bDel', deleteSel);
+  on('bSmaller', () => { state.size = Math.max(.4, +(state.size / 1.15).toFixed(3)); renderAll(); });
+  on('bBigger',  () => { state.size = Math.min(2.5, +(state.size * 1.15).toFixed(3)); renderAll(); });
+  on('bMore', e => { e.stopPropagation(); more.classList.toggle('open'); });
+  on('bHide', () => { toolbar.classList.add('hidden'); document.getElementById('showBar').style.display = 'block'; closeMore(); });
+  on('showBar', () => { toolbar.classList.remove('hidden'); document.getElementById('showBar').style.display = 'none'; });
+  on('mLabels', () => { state.labels = !state.labels; renderAll(); });
+  on('mGrid', () => { state.grid = !state.grid; renderAll(); });
+  on('mSave', () => { saveStart(); closeMore(); });
+  on('mReset', () => { resetStart(); closeMore(); });
+  on('mClear', clearAll);
+  on('mHelp', () => { document.getElementById('help').classList.add('open'); closeMore(); });
+  on('hClose', () => document.getElementById('help').classList.remove('open'));
+
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Delete' || e.key === 'Backspace') { deleteSel(); e.preventDefault(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { copySel(); e.preventDefault(); }
+    else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { state.pieces.forEach(p => sel.add(p.id)); refreshSel(); e.preventDefault(); }
+    else if (e.key === 'Escape') { sel.clear(); refreshSel(); closeMore(); }
+  });
+  window.addEventListener('resize', renderAll);
+
+  // ---------- start ----------
+  buildTabs(); buildTray(); renderAll();
+  if (window.Office && Office.onReady) {
+    Office.onReady(info => {
+      inOffice = !!(info && info.host);
+      if (!state.pieces.length) applyLayout(readSaved());
+    });
+  } else {
+    applyLayout(readSaved());
+  }
+})();
+</script>
+</body>
+</html>
