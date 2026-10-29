@@ -18,6 +18,11 @@
   .piece svg { display:block; width:100%; height:100%; overflow:visible; }
   .piece.sel { filter:drop-shadow(0 0 3px var(--accent)) drop-shadow(0 0 2px var(--accent)); }
   .piece.mat.sel { filter:drop-shadow(0 0 3px var(--accent)); }
+  #cursorDot { position:fixed; left:0; top:0; width:22px; height:22px; margin:-11px 0 0 -11px; border-radius:50%;
+    border:3px solid #fff; background:rgba(29,111,184,.55); box-shadow:0 0 0 2px var(--accent), 0 2px 6px rgba(0,0,0,.35);
+    pointer-events:none; z-index:100003; opacity:0; transition:opacity .25s; }
+  #cursorDot.show { opacity:1; transition:none; }
+  .piece.lift { transform-origin:center; scale:1.06; filter:drop-shadow(0 8px 8px rgba(0,0,0,.35)); }
   #marquee { position:fixed; border:2px dashed var(--accent); background:rgba(29,111,184,.08); display:none; pointer-events:none; z-index:99999; }
 
   #toolbar { position:fixed; left:.5rem; right:.5rem; bottom:.5rem; background:rgba(248,250,252,.97); border:1px solid var(--line);
@@ -60,6 +65,7 @@
 <body>
 <div id="board"></div>
 <div id="marquee"></div>
+<div id="cursorDot"></div>
 
 <div id="toolbar">
   <div class="top">
@@ -326,6 +332,22 @@
     });
   }
 
+  // ---------- visible pointer ----------
+  // PowerPoint hides the mouse pointer during a slideshow while dragging inside the add-in,
+  // so draw our own marker that follows the mouse.
+  const dot = document.getElementById('cursorDot');
+  let dotT;
+  function showDot(e) {
+    if (e.pointerType !== 'mouse' && e.pointerType !== 'pen') return;
+    dot.style.transform = `translate(${e.clientX}px, ${e.clientY}px)`;
+    dot.classList.add('show');
+    clearTimeout(dotT);
+    if (!drag) dotT = setTimeout(() => dot.classList.remove('show'), 2500);
+  }
+  window.addEventListener('pointermove', showDot, true);
+  window.addEventListener('pointerdown', showDot, true);
+  document.addEventListener('pointerleave', () => { if (!drag) dot.classList.remove('show'); });
+
   // ---------- pointer handling ----------
   let drag = null, lastTap = { id: null, t: 0 };
   function overToolbar(x, y) {
@@ -334,6 +356,7 @@
     return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
   }
   function startDrag(e, mode, extra = {}) {
+    try { document.documentElement.setPointerCapture && e.target.setPointerCapture(e.pointerId); } catch (_) {}
     drag = Object.assign({ id: e.pointerId, mode, x0: e.clientX, y0: e.clientY, lx: e.clientX, ly: e.clientY, moved: false }, extra);
   }
   board.addEventListener('pointerdown', e => {
@@ -358,6 +381,7 @@
     if (!drag.moved && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 6) drag.moved = true;
     if (drag.mode === 'move') {
       selList().forEach(p => { p.x = clamp01(p.x + dx / W); p.y = clamp01(p.y + dy / H); place(p); });
+      if (drag.moved && !drag.lifted) { drag.lifted = true; selList().forEach(p => { const el = els.get(p.id); if (el) el.classList.add('lift'); }); }
       toolbar.classList.toggle('hot', drag.moved && overToolbar(e.clientX, e.clientY));
     } else if (drag.moved) {
       const x = Math.min(drag.x0, e.clientX), y = Math.min(drag.y0, e.clientY);
@@ -370,6 +394,8 @@
     if (!drag || e.pointerId !== drag.id) return;
     const d = drag; drag = null;
     toolbar.classList.remove('hot');
+    els.forEach(el => el.classList.remove('lift'));
+    clearTimeout(dotT); dotT = setTimeout(() => dot.classList.remove('show'), 2500);
     if (d.mode === 'move') {
       if (d.moved && overToolbar(e.clientX, e.clientY)) {
         removeIds([...sel]);
